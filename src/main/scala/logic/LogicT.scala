@@ -24,7 +24,13 @@ trait LogicT[F[_], A] {
   }
 }
 
-object LogicT extends LogicTInstances
+object LogicT extends LogicTInstances {
+
+  implicit def logicTMonadReader[M[_, _], R](
+    implicit R: MonadReader[M, R]
+  ): MonadReader[({type l[a, b] = LogicT[({type λ[x] = M[x, a]})#λ, b]})#l, R] = ???
+
+}
 
 sealed abstract class LogicTInstances0 {
 

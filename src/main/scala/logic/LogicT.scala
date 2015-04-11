@@ -79,7 +79,7 @@ sealed abstract class LogicTInstances3 {
 
 sealed abstract class LogicTInstances2 extends LogicTInstances3 {
 
-  implicit def logicTMonadLogic[F[_]](implicit L: MonadLogic[F]): MonadLogic[LogicT[F, ?]] = new MonadLogic[LogicT[F, ?]] {
+  implicit def logicTMonadLogic[F[_]](implicit F: Monad[F]): MonadLogic[LogicT[F, ?]] = new MonadLogic[LogicT[F, ?]] {
 
     override def map[A, B](lt: LogicT[F, A])(f: A => B) = logicTMonadPlus.map(lt)(f)
     def point[A](a: => A) = logicTMonadPlus.point(a)
@@ -87,14 +87,19 @@ sealed abstract class LogicTInstances2 extends LogicTInstances3 {
     def empty[A] = logicTMonadPlus.empty[A]
     def plus[A](a: LogicT[F, A], b: => LogicT[F, A]) = logicTMonadPlus.plus(a, b)
 
-    def split[A](l: LogicT[F, A]) = {
-      def ssk(a: A)(fk: F[Option[(A, F[A])]]): F[Option[(A, F[A])]] =
-        L.pure(Some((a, L.bind(fk)(b => MonadLogic.reflect(b)))))
-      val s: F[Option[(A, F[A])]] = L.pure(None)
-      logicTMonadTrans.liftM(L.map(l(s)(ssk _))(o => o.map { case (a, ll) =>
-        (a, logicTMonadTrans.liftM(ll))
-      }))
-    }
+    override def split[A](m: LogicT[F, A]): LogicT[F, Option[(A, LogicT[F, A])]] =
+      MonadTrans[LogicT].liftM(
+        m.apply(F.point(Option.empty[(A, LogicT[F, A])]))(
+          a => fk => F.point(
+            Some((
+              a,
+              MonadTrans[LogicT].liftM(fk).flatMap(
+                MonadLogic.reflect[LogicT[F, ?], A]
+              )
+            ))
+          )
+        )
+      )
   }
 }
 

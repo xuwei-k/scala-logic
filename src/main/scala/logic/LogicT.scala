@@ -37,28 +37,8 @@ object LogicT extends LogicTInstances {
 
 sealed abstract class LogicTInstances3 {
 
-  implicit def logicTMonadPlus[F[_]]: MonadPlus[LogicT[F, ?]] = new MonadPlus[LogicT[F, ?]] {
-
-    override def map[A, B](lt: LogicT[F, A])(f: A => B) = new LogicT[F, B] {
-      def apply[R](l: F[R])(sk: B => F[R] => F[R]) = lt(l)(a => sk(f(a)))
-    }
-
-    def point[A](a: => A) = new LogicT[F, A] {
-      def apply[R](fk: F[R])(sk: A => F[R] => F[R]) = sk(a)(fk)
-    }
-
-    def bind[A, B](fa: LogicT[F, A])(f: A => LogicT[F, B]) = new LogicT[F, B] {
-      def apply[R](fk: F[R])(sk: B => F[R] => F[R]) = fa(fk)(a => fkk => f(a)(fkk)(sk))
-    }
-
-    def empty[A] = new LogicT[F, A] {
-      def apply[R](fk: F[R])(sk: A => F[R] => F[R]) = fk
-    }
-
-    def plus[A](a: LogicT[F, A], b: => LogicT[F, A]) = new LogicT[F, A] {
-      def apply[R](fk: F[R])(sk: A => F[R] => F[R]) = a(b(fk)(sk))(sk)
-    }
-  }
+  implicit def logicTMonadPlus[F[_]]: MonadPlus[LogicT[F, ?]] =
+    new LogicTMonadPlus[F]{}
 
   implicit val logicTMonadTrans: MonadTrans[LogicT] = new MonadTrans[LogicT] {
     def liftM[G[_] : Monad, A](m: G[A]) = new LogicT[G, A] {
@@ -79,28 +59,22 @@ sealed abstract class LogicTInstances3 {
 
 sealed abstract class LogicTInstances2 extends LogicTInstances3 {
 
-  implicit def logicTMonadLogic[F[_]](implicit F: Monad[F]): MonadLogic[LogicT[F, ?]] = new MonadLogic[LogicT[F, ?]] {
-
-    override def map[A, B](lt: LogicT[F, A])(f: A => B) = logicTMonadPlus.map(lt)(f)
-    def point[A](a: => A) = logicTMonadPlus.point(a)
-    def bind[A, B](fa: LogicT[F, A])(f: A => LogicT[F, B]) = logicTMonadPlus.bind(fa)(f)
-    def empty[A] = logicTMonadPlus.empty[A]
-    def plus[A](a: LogicT[F, A], b: => LogicT[F, A]) = logicTMonadPlus.plus(a, b)
-
-    override def split[A](m: LogicT[F, A]): LogicT[F, Option[(A, LogicT[F, A])]] =
-      MonadTrans[LogicT].liftM(
-        m.apply(F.point(Option.empty[(A, LogicT[F, A])]))(
-          a => fk => F.point(
-            Some((
-              a,
-              MonadTrans[LogicT].liftM(fk).flatMap(
-                MonadLogic.reflect[LogicT[F, ?], A]
-              )
-            ))
+  implicit def logicTMonadLogic[F[_]](implicit F: Monad[F]): MonadLogic[LogicT[F, ?]] =
+    new LogicTMonadPlus[F] with MonadLogic[LogicT[F, ?]] {
+      override def split[A](m: LogicT[F, A]): LogicT[F, Option[(A, LogicT[F, A])]] =
+        MonadTrans[LogicT].liftM(
+          m.apply(F.point(Option.empty[(A, LogicT[F, A])]))(
+            a => fk => F.point(
+              Some((
+                a,
+                MonadTrans[LogicT].liftM(fk).flatMap(
+                  MonadLogic.reflect[LogicT[F, ?], A]
+                )
+                ))
+            )
           )
         )
-      )
-  }
+    }
 }
 
 sealed abstract class LogicTInstances1 extends LogicTInstances2 {
@@ -125,14 +99,33 @@ sealed abstract class LogicTInstances extends LogicTInstances0 {
     }
 }
 
-private trait LogicTMonadReader[F[_, _], R] extends MonadReader[Lambda[(A, B) => LogicT[F[A, ?], B]], R] {
+private abstract class LogicTMonadPlus[F[_]] extends MonadPlus[LogicT[F, ?]] {
+  override final def map[A, B](lt: LogicT[F, A])(f: A => B) = new LogicT[F, B] {
+    def apply[R](l: F[R])(sk: B => F[R] => F[R]) = lt(l)(a => sk(f(a)))
+  }
+
+  override final def point[A](a: => A) = new LogicT[F, A] {
+    def apply[R](fk: F[R])(sk: A => F[R] => F[R]) = sk(a)(fk)
+  }
+
+  override final def bind[A, B](fa: LogicT[F, A])(f: A => LogicT[F, B]) = new LogicT[F, B] {
+    def apply[R](fk: F[R])(sk: B => F[R] => F[R]) = fa(fk)(a => fkk => f(a)(fkk)(sk))
+  }
+
+  override final def empty[A] = new LogicT[F, A] {
+    def apply[R](fk: F[R])(sk: A => F[R] => F[R]) = fk
+  }
+
+  override final def plus[A](a: LogicT[F, A], b: => LogicT[F, A]) = new LogicT[F, A] {
+    def apply[R](fk: F[R])(sk: A => F[R] => F[R]) = a(b(fk)(sk))(sk)
+  }
+}
+
+private trait LogicTMonadReader[F[_, _], R] extends LogicTMonadPlus[F[R, ?]] with MonadReader[Lambda[(A, B) => LogicT[F[A, ?], B]], R] {
 
   implicit def F: MonadReader[F, R]
 
   type G[X] = F[R, X]
-
-  def point[A](a: => A) = LogicT.logicTMonadTrans.liftM[G, A](F.point(a))
-  def bind[A, B](fa: LogicT[G, A])(f: A => LogicT[G, B]): LogicT[G, B] = LogicT.logicTMonadPlus.bind(fa)(f)
 
   def ask = LogicT.logicTMonadTrans.liftM[G, R](F.ask)
   def local[A](f: R => R)(m: LogicT[G, A]): LogicT[G, A] = new LogicT[G, A] {
@@ -141,28 +134,22 @@ private trait LogicTMonadReader[F[_, _], R] extends MonadReader[Lambda[(A, B) =>
   }
 }
 
-private trait LogicTMonadState[F[_, _], S] extends MonadState[Lambda[(A, B) => LogicT[F[A, ?], B]], S] {
+private trait LogicTMonadState[F[_, _], S] extends LogicTMonadPlus[F[S, ?]] with MonadState[Lambda[(A, B) => LogicT[F[A, ?], B]], S] {
 
   implicit def F: MonadState[F, S]
 
   type G[X] = F[S, X]
-
-  def point[A](a: => A) = LogicT.logicTMonadTrans.liftM[G, A](F.point(a))
-  def bind[A, B](fa: LogicT[G, A])(f: A => LogicT[G, B]): LogicT[G, B] = LogicT.logicTMonadPlus.bind(fa)(f)
 
   def init = LogicT.logicTMonadTrans.liftM[G, S](F.init)
   def get = LogicT.logicTMonadTrans.liftM[G, S](F.get)
   def put(s: S) = LogicT.logicTMonadTrans.liftM[G, Unit](F.put(s))
 }
 
-private trait LogicTMonadError[F[_, _], E] extends MonadError[Lambda[(A, B) => LogicT[F[A, ?], B]], E] {
+private trait LogicTMonadError[F[_, _], E] extends LogicTMonadPlus[F[E, ?]] with MonadError[Lambda[(A, B) => LogicT[F[A, ?], B]], E] {
 
   implicit def F: MonadError[F, E]
 
   type G[X] = F[E, X]
-
-  def point[A](a: => A) = LogicT.logicTMonadTrans.liftM[G, A](F.point(a))
-  def bind[A, B](fa: LogicT[G, A])(f: A => LogicT[G, B]): LogicT[G, B] = LogicT.logicTMonadPlus.bind(fa)(f)
 
   def raiseError[A](e: E) = LogicT.logicTMonadTrans.liftM[G, A](F.raiseError(e))
   def handleError[A](l: LogicT[G, A])(f: E => LogicT[G, A]): LogicT[G, A] = new LogicT[G, A] {

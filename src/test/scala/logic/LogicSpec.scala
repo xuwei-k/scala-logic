@@ -1,14 +1,51 @@
 package logic
 
 import scalaz._
-import scalaz.std.anyVal._
-import scalaz.std.list._
-import scalaz.scalacheck.ScalazProperties._
+import scalaz.std.AllInstances._
+import FunctionEqual._
 
-object LogicSpec extends SpecLite with TestLogicInstances {
+object LogicSpec extends ScalazCheck {
 
-  checkAll(monadPlus.strongLaws[Logic])
-  checkAll(traverse.laws[Logic])
+  private[this] implicit def stateTEqual[F[_], A, B](implicit F: Equal[A => F[(A, B)]]): Equal[StateT[F, A, B]] =
+    F.contramap(_.apply _)
+
+  private[this] implicit def kleisliEqual[F[_], A: Gen, B](implicit E: Equal[F[B]]): Equal[Kleisli[F, A, B]] =
+    Equal[A => F[B]].contramap(_.run)
+
+  private[this] implicit def logicGen[A: Gen]: Gen[Logic[A]] =
+    Gen[List[A]].map(xs =>
+      new Logic[A]{
+        def apply[R](l: R)(f: A => R => R) =
+          xs.foldRight(l)((a, b) => f(a)(b))
+      }
+    )
+
+  private[this] implicit def logicEqual[A: Equal] =
+    Equal.equal[Logic[A]] { (a, b) =>
+      import scalaz.syntax.equal._
+      val f1 = (l: Logic[A]) => l.observe
+      val f2 = (l: Logic[A]) => l.observeAll
+      (f1(a) === f1(b)) && (f2(a) === f2(b))
+    }
+
+  val testLaws =
+    Properties.either(
+      "Logic",
+      scalaz.props.monadPlus.laws[Logic],
+      scalaz.props.traverse.laws[Logic]
+    )
+
+  val testListMonadLogicLaws =
+    monadLogicLaw.laws[List]
+
+  val testStateT =
+    monadLogicLaw.laws[StateT[List, Int, ?]]
+
+  val testKleisli =
+    monadLogicLaw.laws[Kleisli[List, Int, ?]]
+
+  val testWriter =
+    monadLogicLaw.laws[WriterT[List, Int, ?]]
 
   object instances {
     def functor[F[_] : Functor] = Functor[LogicT[F, ?]]

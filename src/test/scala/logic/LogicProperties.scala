@@ -1,25 +1,33 @@
 package logic
 
-import scalaz.Equal
-import org.scalacheck.{Arbitrary, Gen, Prop, Properties}
-import Prop.forAll
+import scalaz._
+import scalaz.std.string._
 
-object LogicProperties {
+object monadLogicLaw {
 
-  object monadLogicLaw {
+  def splitEmpty[F[_], A](implicit M: MonadLogic[F], E: Equal[F[Option[(A, F[A])]]]) =
+    Property.prop(E.equal(M.split(M.empty), M.pure(None)))
 
-    def split[F[_], A](implicit M: MonadLogic[F], arbF: Arbitrary[F[A]], arbA: Arbitrary[A],
-      arbTuple: Arbitrary[(A, F[A])], E: Equal[F[Option[(A, F[A])]]]) = new Properties("monad logic") {
-      property("split empty") = E.equal(M.split(M.empty), M.pure(None))
-      property("split values") = forAll { (a: A, m: F[A]) =>
-        E.equal(M.split(M.plus(M.pure(a), m)), M.pure(Some((a, m))))
-      }
+  def splitValues[F[_], A](implicit M: MonadLogic[F], arbF: Gen[F[A]], arbA: Gen[A],
+                           E: Equal[F[Option[(A, F[A])]]]) =
+    Property.forAll { (a: A, m: F[A]) =>
+      E.equal(M.split(M.plus(M.pure(a), m)), M.pure(Some((a, m))))
     }
-    def reflect[F[_], A](implicit M: MonadLogic[F], arbF: Arbitrary[F[A]],
-      arbA: Arbitrary[A], E: Equal[F[A]]) = new Properties("monad logic") {
-      property("reflect") = forAll { m: F[A] =>
-        E.equal(M.bind(M.split(m))(MonadLogic.reflect(_)), m)
-      }
+
+  def reflect[F[_], A](implicit M: MonadLogic[F], arbF: Gen[F[A]],
+                       arbA: Gen[A], E: Equal[F[A]]) =
+    Property.forAll { m: F[A] =>
+      E.equal(M.bind(M.split(m))(MonadLogic.reflect(_)), m)
     }
-  }
+
+  def laws[F[_]](implicit
+                 M: MonadLogic[F],
+                 arbF: Gen[F[Int]],
+                 E1: Equal[F[Option[(Int, F[Int])]]],
+                 E2: Equal[F[Int]]
+                  ) = Properties.properties("monadLogic")(
+    "split empty" -> splitEmpty[F, Int],
+    "split values" -> splitValues[F, Int],
+    "reflect" -> reflect[F, Int]
+  )
 }

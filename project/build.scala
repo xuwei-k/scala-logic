@@ -46,6 +46,7 @@ object ScalaLogicBuild extends Build {
     resolvers += "bintray/non" at "http://dl.bintray.com/non/maven",
     resolvers += Opts.resolver.sonatypeSnapshots,
     addCompilerPlugin("org.spire-math" % "kind-projector" % "0.5.2"  cross CrossVersion.binary),
+    parallelExecution in Test := false,
     buildInfoKeys := Seq[BuildInfoKey](
       organization,
       name,

@@ -36,7 +36,7 @@ trait MonadLogicFunctions {
   def reflect[F[_], A](a: Option[(A, F[A])])(implicit L: MonadLogic[F]): F[A] =
     a match {
       case None => L.empty
-      case Some((a, m)) => L.plus(L.pure(a), m)
+      case Some((x, m)) => L.plus(L.pure(x), m)
     }
 
   def lnot[F[_], A](m: F[A])(implicit L: MonadLogic[F]): F[Unit] =
@@ -67,6 +67,7 @@ trait MonadLogicInstances1 extends MonadLogicInstances2 {
         case Some(((s2, a), m)) => L.pure((s2, Some((a, StateT(Function.const(m))))))
       })
 
+    /*
     override def interleave[A](m1: StateT[F, S, A], m2: StateT[F, S, A]): StateT[F, S, A] = StateT(s =>
       L.interleave(m1.run(s), m2.run(s))
     )
@@ -79,6 +80,7 @@ trait MonadLogicInstances1 extends MonadLogicInstances2 {
       StateT(s => L.ifte(t.run(s), el.run(s)){ case (s2, a) => th(a).run(s2) })
 
     override def once[A](m: StateT[F, S, A]): StateT[F, S, A] = StateT(s => L.once(m.run(s)))
+    */
   }
 }
 
@@ -136,6 +138,8 @@ private trait WriterTMonadLogic[F[_], W] extends MonadLogic[WriterT[F, W, ?]] {
       case Some(((w, a), m)) => L.pure((w, Some((a, WriterT(m)))))
     })
 
+  /*
+
   override def interleave[A](m1: WriterT[F, W, A], m2: WriterT[F, W, A]): WriterT[F, W, A] =
     WriterT(L.interleave(m1.run, m2.run))
 
@@ -146,4 +150,5 @@ private trait WriterTMonadLogic[F[_], W] extends MonadLogic[WriterT[F, W, ?]] {
     WriterT(L.ifte(t.run, el.run){ case (w, a) => tell(w).flatMap(_ => th(a)).run })
 
   override def once[A](m: WriterT[F, W, A]): WriterT[F, W, A] = WriterT(L.once(m.run))
+  */
 }

@@ -14,14 +14,14 @@ trait LogicT[F[_], A] {
   def observeAll(implicit M: Applicative[F]): F[List[A]] =
     this(M.pure(Nil: List[A]))(a => b => M.map(b)(a :: _))
 
-  def observeMany(n: Int)(implicit M: Applicative[F], L: MonadLogic[LogicT[F, ?]]): F[List[A]] = {
-    def sk(o: Option[(A, LogicT[F, A])])(a: Any): F[List[A]] = o match {
+  def observeMany(n: Int)(implicit M: Monad[F]): F[List[A]] = {
+    def sk[X](o: Option[(A, LogicT[F, A])])(x: X): F[List[A]] = o match {
       case None => M.pure(Nil)
       case Some((a, m)) => M.map(m.observeMany(n - 1))(a :: _)
     }
     if(n <= 0) M.pure(Nil)
     else if(n == 1) this(M.pure(Nil: List[A]))(a => Function.const(M.pure(List(a))))
-    else L.split(this)(M.pure(Nil: List[A]))(sk)
+    else MonadLogic[LogicT[F, ?]].split(this)(M.pure(Nil: List[A]))(sk)
   }
 }
 

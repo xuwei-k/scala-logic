@@ -5,6 +5,8 @@ import scalaz.Kleisli
 package object smallcheck {
 
   type Depth = Int
+  type Argument = String
+  type Reason = String
 
   def generate[M[_], A](f: Depth => List[A]): Series[M, A] =
     Series[M, A](
@@ -22,6 +24,5 @@ package object smallcheck {
         ({type l[a] = Series[M, a]})#l, A
       ](p(x))(x)
     }
-
 
 }

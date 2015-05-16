@@ -16,4 +16,12 @@ package object smallcheck {
       }
     )
 
+  def suchThat[M[_], A](s: Series[M, A])(p: A => Boolean): Series[M, A] =
+    s.flatMap{ x =>
+      scalaz.std.boolean.pointOrEmpty[
+        ({type l[a] = Series[M, a]})#l, A
+      ](p(x))(x)
+    }
+
+
 }

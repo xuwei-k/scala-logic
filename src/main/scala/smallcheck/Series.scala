@@ -3,7 +3,12 @@ package smallcheck
 import logic._
 import scalaz._
 
-final case class Series[M[_], A](run: Kleisli[({type l[a] = LogicT[M, a]})#l, Depth, A])
+final case class Series[M[_], A](run: Kleisli[({type l[a] = LogicT[M, a]})#l, Depth, A]) {
+  def flatMap[B](f: A => Series[M, B]): Series[M, B] =
+    Series(run.flatMap(f.andThen(_.run)))
+  def map[B](f: A => B): Series[M, B] =
+    Series(run.map(f))
+}
 
 sealed abstract class SeriesInstances {
 

@@ -1,7 +1,7 @@
 import sbtrelease.ReleaseStateTransformations._
+import sbtcrossproject.{crossProject, CrossType}
 
 val scalazVersion = "7.2.20"
-val scalaz = "org.scalaz" %% "scalaz-core" % scalazVersion
 
 def gitHash: String = scala.util.Try(
   sys.process.Process("git rev-parse HEAD").lineStream.head
@@ -17,8 +17,9 @@ val Scala211 = "2.11.12"
 
 lazy val buildSettings = Seq(
   BuildInfoPlugin.projectSettings,
-  scalapropsWithScalazlaws
+  scalapropsCoreSettings
 ).flatten ++ Seq(
+  name := "scala-logic",
   scalaVersion := Scala211,
   crossScalaVersions := Seq("2.10.7", Scala211, "2.12.4", "2.13.0-M3"),
   resolvers += Opts.resolver.sonatypeReleases,
@@ -43,7 +44,9 @@ lazy val buildSettings = Seq(
   scalapropsVersion := "0.5.4",
   publishTo := sonatypePublishTo.value,
   libraryDependencies ++= Seq(
-    scalaz
+    "org.scalaz" %%% "scalaz-core" % scalazVersion,
+    "com.github.scalaprops" %%% "scalaprops" % scalapropsVersion.value % "test",
+    "com.github.scalaprops" %%% "scalaprops-scalazlaws" % scalapropsVersion.value % "test"
   ),
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.6" cross CrossVersion.binary),
   buildInfoKeys := BuildInfoKey.ofN(
@@ -66,12 +69,11 @@ lazy val buildSettings = Seq(
     setReleaseVersion,
     commitReleaseVersion,
     tagRelease,
-    ReleaseStep(
-      action = state => Project.extract(state).runTask(PgpKeys.publishSigned, state)._1,
-      enableCrossBuild = true
-    ),
+    releaseStepCommandAndRemaining("+publishSigned"),
+    releaseStepCommandAndRemaining(s"; ++ ${Scala211} ; native/publishSigned"),
     setNextVersion,
     commitNextVersion,
+    releaseStepCommandAndRemaining("sonatypeReleaseAll"),
     pushChanges
   ),
   credentials ++= PartialFunction.condOpt(sys.env.get("SONATYPE_USER") -> sys.env.get("SONATYPE_PASS")){
@@ -110,9 +112,42 @@ lazy val buildSettings = Seq(
   scalacOptions in (c, console) ~= {_.filterNot(unusedWarnings.toSet)}
 )
 
-lazy val logic = Project(
-  id = "scala-logic",
-  base = file(".")
-).settings(
-  buildSettings
-)
+lazy val logic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
+  .in(file("."))
+  .settings(
+    buildSettings
+  )
+  .jsSettings(
+    scalacOptions += {
+      val a = (baseDirectory in LocalRootProject).value.toURI.toString
+      val g = "https://raw.githubusercontent.com/pocketberserker/scala-logic/" + gitHash
+      s"-P:scalajs:mapSourceURI:$a->$g/"
+    }
+  )
+  .nativeSettings(
+    scalapropsNativeSettings,
+    scalaVersion := Scala211,
+    crossScalaVersions := Seq(Scala211)
+  )
+
+lazy val root = project
+  .in(file("."))
+  .settings(
+    publishArtifact := false,
+    publish := {},
+    publishLocal := {},
+    PgpKeys.publishSigned := {},
+    PgpKeys.publishLocalSigned := {},
+    sources in Compile := Nil,
+    sources in Test := Nil,
+  )
+  .aggregate(
+    // // ignore native on purpose
+    jvm,
+    js
+  )
+
+lazy val jvm = logic.jvm.withId("jvm")
+lazy val js = logic.js.withId("js")
+lazy val native = logic.native.withId("native")

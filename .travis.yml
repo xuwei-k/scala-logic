@@ -16,3 +16,11 @@ cache:
 before_cache:
   - find $HOME/.ivy2/cache -name "ivydata-*.properties" | xargs rm
   - find $HOME/.ivy2/cache -name "*SNAPSHOT*" | xargs rm -rf
+matrix:
+  include:
+  - scala: SCALA_NATIVE
+    sudo: required
+    before_install:
+    - curl https://raw.githubusercontent.com/scala-native/scala-native/v0.3.7/scripts/travis_setup.sh | bash -x
+    script:
+    - sbt native/test

@@ -13,6 +13,6 @@ jobs:
     - uses: olafurpg/setup-scala@v13
       with:
         java-version: "adopt@1.8"
-    - uses: coursier/cache-action@v6
+    - uses: coursier/cache-action@v7
     - run: sbt -v "+ test"
     - run: rm -rf ~/.ivy2/local
